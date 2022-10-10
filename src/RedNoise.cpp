@@ -4,6 +4,8 @@
 #include <fstream>
 #include <vector>
 #include "glm/glm.hpp"
+#include <CanvasPoint.h>
+#include <Colour.h>
 
 #define WIDTH 320
 #define HEIGHT 240
@@ -29,8 +31,6 @@ std::vector<std::vector<float>> twoDimensionsInterpolation(float from, float to,
 std::vector<glm::vec3> interpolateThreeElementValues(glm::vec3 from, glm::vec3 to, int numberOfValues) {
     std::vector<glm::vec3> results;
     std::vector<float> rVector = interpolateSingleFloats(from.r, to.r, numberOfValues);
-//    for(size_t i=0; i<rVector.size(); i++) std::cout << rVector[i] << " ";
-//    std::cout << std::endl;
     std::vector<float> gVector = interpolateSingleFloats(from.g, to.g, numberOfValues);
     std::vector<float> bVector = interpolateSingleFloats(from.b, to.b, numberOfValues); // ctrl g for select occurrence
     for (int i = 0; i < numberOfValues; i++) {
@@ -43,7 +43,7 @@ std::vector<std::vector<glm::vec3>> threeDimData(glm::vec3 topLeft, glm::vec3 to
     std::vector<std::vector<glm::vec3>> results;
     glm::vec3 fraction = (bottomLeft - topLeft) / float(yLength - 1);
     for (float i = 0; i < yLength; i++) {
-        results.push_back(interpolateThreeElementValues((topLeft + fraction) * i, (topRight + fraction) * i, xLength));
+        results.push_back(interpolateThreeElementValues(topLeft + fraction * i, topRight + fraction * i, xLength));
     }
     return results;
 }
@@ -89,6 +89,30 @@ void draw(DrawingWindow &window) {
 	}
 }
 
+uint32_t translateColor(Colour colour) {
+    uint32_t colorUint = (255 << 24) + (colour.red << 16) + (colour.green << 8) + colour.blue;
+    return colorUint;
+}
+
+void drawLine(DrawingWindow &window, float fromX, float fromY, float toX, float toY) {
+    window.clearPixels();
+    CanvasPoint from = CanvasPoint(fromX, fromY);
+    CanvasPoint to = CanvasPoint(toX, toY);
+    float xDiff = abs(toX - fromX);
+    float yDiff = abs(toY - fromY);
+    float numOfSteps = fmax(xDiff, yDiff);
+    float xStepSize = xDiff/numOfSteps;
+    float yStepSize = yDiff/numOfSteps;
+    for (float i = 0.0; i < numOfSteps; i++) {
+        Colour color = Colour(255, 255, 255);
+        uint32_t colorUint = translateColor(color);
+        float x = fromX + xStepSize * i;
+        float y = fromY + yStepSize * i;
+        window.setPixelColour(round(x), round(y), colorUint);
+    }
+}
+
+
 void handleEvent(SDL_Event event, DrawingWindow &window) {
 	if (event.type == SDL_KEYDOWN) {
 		if (event.key.keysym.sym == SDLK_LEFT) std::cout << "LEFT" << std::endl;
@@ -106,7 +130,7 @@ int main(int argc, char *argv[]) {
 	SDL_Event event;
 
 
-    // test 1
+//    test 1
 //    std::vector<float> result;
 //    result = interpolateSingleFloats(2.2, 8.5, 7);
 //    for(size_t i=0; i<result.size(); i++) std::cout << result[i] << " ";
@@ -129,16 +153,13 @@ int main(int argc, char *argv[]) {
         glm::vec3 bottomRight(0, 255, 0);    // green
         glm::vec3 bottomLeft(255, 255, 0);   // yellow
         std::vector<std::vector<glm::vec3>> result = threeDimData(topLeft, topRight, bottomLeft, bottomRight, window.height, window.width);
-        drawColourfulScreen(window, result);
+//        drawColourfulScreen(window, result);
+
+        // testing drawLine function
+        drawLine(window, 12,23,300,240);
+
         // Need to render the frame at the end, or nothing actually gets shown on the screen !
         window.renderFrame();
     }
 
-//	while (true) {
-//		// We MUST poll for events - otherwise the window will freeze !
-//		if (window.pollForInputEvents(event)) handleEvent(event, window);
-//		draw(window);
-//		// Need to render the frame at the end, or nothing actually gets shown on the screen !
-//		window.renderFrame();
-//	}
 }

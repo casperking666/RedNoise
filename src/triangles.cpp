@@ -6,7 +6,8 @@
 #include "glm/glm.hpp"
 #include <CanvasPoint.h>
 #include <Colour.h>
-#include <CanvasTriangle.h>
+#include <TextureMap.h>
+#include "RedNoise.h"
 
 #define WIDTH 320
 #define HEIGHT 240
@@ -68,6 +69,72 @@ CanvasPoint findPoint(CanvasPoint v0, CanvasPoint v1, CanvasPoint v2) {
     return CanvasPoint(coorX, v1.y);
 }
 
+CanvasTriangle generateRandomPoints() {
+    CanvasPoint v0 = CanvasPoint(rand()%320, rand()%240); // useless, just for testing purposes
+    CanvasPoint v1 = CanvasPoint(rand()%320, rand()%240);
+    CanvasPoint v2 = CanvasPoint(rand()%320, rand()%240);
+    return CanvasTriangle(v0, v1, v2);
+}
+
+Colour generateRandomColor() {
+    Colour color = Colour(rand()%255, rand()%255, rand()%255);
+    return color;
+}
+
+TextureMap loadPPMImage() {
+    TextureMap image = TextureMap("texture.ppm");
+    return image;
+}
+
+void drawLineTest(DrawingWindow &window, CanvasPoint from, CanvasPoint to, TextureMap image) {
+//    window.clearPixels();
+    float xDiff = to.x - from.x;
+    float yDiff = to.y - from.y;
+    float numOfSteps = std::max(abs(xDiff), abs(yDiff));
+    float xStepSize = xDiff/numOfSteps;
+    float yStepSize = yDiff/numOfSteps;
+    for (float i = 0.0; i < numOfSteps; i++) {
+        float x = from.x + xStepSize * i;
+        float y = from.y + yStepSize * i;
+        uint32_t colorUint = image.pixels[round(x * y)];
+        window.setPixelColour(round(x), round(y), colorUint);
+    }
+}
+
+// I just think it's silly, you gave that goddamn Colour class, now we are using uint32 again. like what?
+void drawTexture(DrawingWindow &window) {
+    TextureMap image = loadPPMImage();
+    CanvasTriangle sample = generateRandomPoints();
+    CanvasTriangle triangle = sortCanvasPoint(sample.v0(), sample.v1(), sample.v2());
+//    std::cout << triangle.v0() << std::endl;
+//    std::cout << triangle.v1() << std::endl;
+//    std::cout << triangle.v2() << std::endl;
+    CanvasPoint intersect = findPoint(triangle.v0(), triangle.v1(), triangle.v2());
+    //std::cout << intersect << std::endl;
+    float numOfSteps0 = abs(triangle.v0().y - triangle.v1().y);
+    float numOfSteps1 = abs((triangle.v2().y - triangle.v1().y));
+
+    float xStepSize0 = (intersect.x - triangle.v0().x) / numOfSteps0;
+    float xStepSize1 = (triangle.v2().x - intersect.x) / numOfSteps1;
+    float xStepSize2 = (triangle.v1().x - triangle.v0().x) / numOfSteps0;
+    float xStepSize3 = (triangle.v2().x - triangle.v1().x) / numOfSteps1;
+
+    for (float i = 0; i < numOfSteps0; i++) {
+        CanvasPoint startCanvas = CanvasPoint(round(triangle.v0().x + xStepSize0 * i), triangle.v0().y + i);
+        CanvasPoint endCanvas = CanvasPoint(round(triangle.v0().x + xStepSize2 * i), triangle.v0().y + i);
+        drawLineTest(window, startCanvas, endCanvas, image);
+    }
+
+    for (float i = 0; i < numOfSteps1; i++) {
+//        std::cout << intersect.x << " " << v1.x << std::endl;
+        CanvasPoint startCanvas = CanvasPoint(round(intersect.x + xStepSize1 * i), intersect.y + i);
+        CanvasPoint endCanvas = CanvasPoint(round(triangle.v1().x + xStepSize3 * i), intersect.y + i);
+        drawLineTest(window, startCanvas, endCanvas, image);
+    }
+
+}
+
+
 void drawFilledTriangle(DrawingWindow &window, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2, Colour color) {
     CanvasTriangle triangle = sortCanvasPoint(v0, v1, v2);
 //    std::cout << triangle.v0() << std::endl;
@@ -98,6 +165,8 @@ void drawFilledTriangle(DrawingWindow &window, CanvasPoint v0, CanvasPoint v1, C
 
 }
 
+
+
 void handleEvent(SDL_Event event, DrawingWindow &window) {
     if (event.type == SDL_KEYDOWN) {
         if (event.key.keysym.sym == SDLK_LEFT) std::cout << "LEFT" << std::endl;
@@ -105,23 +174,17 @@ void handleEvent(SDL_Event event, DrawingWindow &window) {
         else if (event.key.keysym.sym == SDLK_UP) std::cout << "UP" << std::endl;
         else if (event.key.keysym.sym == SDLK_DOWN) std::cout << "DOWN" << std::endl;
         else if (event.key.keysym.sym == SDLK_u) {
-
-            CanvasPoint v0 = CanvasPoint(rand()%320, rand()%240); // useless, just for testing purposes
-            CanvasPoint v1 = CanvasPoint(rand()%320, rand()%240);
-            CanvasPoint v2 = CanvasPoint(rand()%320, rand()%240);
-            Colour color = Colour(rand()%255, rand()%255, rand()%255);
-
-            drawTriangle(window, v0, v1, v2, color);
-            std::cout << "U" << std::endl;
+//            CanvasTriangle randVertices = generateRandomPoints();
+//            Colour color = generateRandomColor();
+//            drawTriangle(window, randVertices.v0(), randVertices.v1(), randVertices.v2(), color);
+//            std::cout << "U" << std::endl;
+            drawTexture(window);
         }
-
         else if (event.key.keysym.sym == SDLK_f) {
-            CanvasPoint v0 = CanvasPoint(rand()%320, rand()%240); // useless, just for testing purposes
-            CanvasPoint v1 = CanvasPoint(rand()%320, rand()%240);
-            CanvasPoint v2 = CanvasPoint(rand()%320, rand()%240);
-            Colour color = Colour(rand()%255, rand()%255, rand()%255);
-            drawTriangle(window, v0, v1, v2, color);
-            drawFilledTriangle(window, v0, v1, v2, color);
+            CanvasTriangle randVertices = generateRandomPoints();
+            Colour color = generateRandomColor();
+            drawTriangle(window, randVertices.v0(), randVertices.v1(), randVertices.v2(), color);
+            drawFilledTriangle(window, randVertices.v0(), randVertices.v1(), randVertices.v2(), color);
         }
     } else if (event.type == SDL_MOUSEBUTTONDOWN) {
         window.savePPM("output.ppm");

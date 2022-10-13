@@ -94,24 +94,6 @@ uint32_t translateColor(Colour colour) {
     return colorUint;
 }
 
-void drawLine(DrawingWindow &window, float fromX, float fromY, float toX, float toY) {
-    window.clearPixels();
-    CanvasPoint from = CanvasPoint(fromX, fromY);
-    CanvasPoint to = CanvasPoint(toX, toY);
-    float xDiff = abs(toX - fromX);
-    float yDiff = abs(toY - fromY);
-    float numOfSteps = fmax(xDiff, yDiff);
-    float xStepSize = xDiff/numOfSteps;
-    float yStepSize = yDiff/numOfSteps;
-    for (float i = 0.0; i < numOfSteps; i++) {
-        Colour color = Colour(255, 255, 255);
-        uint32_t colorUint = translateColor(color);
-        float x = fromX + xStepSize * i;
-        float y = fromY + yStepSize * i;
-        window.setPixelColour(round(x), round(y), colorUint);
-    }
-}
-
 
 void handleEvent(SDL_Event event, DrawingWindow &window) {
 	if (event.type == SDL_KEYDOWN) {
@@ -154,9 +136,6 @@ int main(int argc, char *argv[]) {
         glm::vec3 bottomLeft(255, 255, 0);   // yellow
         std::vector<std::vector<glm::vec3>> result = threeDimData(topLeft, topRight, bottomLeft, bottomRight, window.height, window.width);
 //        drawColourfulScreen(window, result);
-
-        // testing drawLine function
-        drawLine(window, 12,23,300,240);
 
         // Need to render the frame at the end, or nothing actually gets shown on the screen !
         window.renderFrame();

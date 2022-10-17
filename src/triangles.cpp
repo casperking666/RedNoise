@@ -86,6 +86,7 @@ TextureMap loadPPMImage() {
     return image;
 }
 
+// this is for drawing the textureMap into the screen with the same scale, basically like displaying
 void drawLineTest(DrawingWindow &window, CanvasPoint from, CanvasPoint to, TextureMap image) {
 //    window.clearPixels();
     float xDiff = to.x - from.x;
@@ -99,6 +100,29 @@ void drawLineTest(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Textu
         int index = round(x + y * image.width);
         uint32_t colorUint = image.pixels[index];
 //        std::cout << index << "  " << x << "  " << y << std::endl;
+        window.setPixelColour(round(x), round(y), colorUint);
+    }
+}
+
+void drawTexturePoint(DrawingWindow &window, CanvasPoint from, CanvasPoint to, TextureMap image, glm::mat3 matrix) {
+//    window.clearPixels();
+//    std::cout << "  " << from << "  " << to << std::endl;
+
+    float xDiff = to.x - from.x;
+    float yDiff = to.y - from.y;
+    float numOfSteps = std::max(abs(xDiff), abs(yDiff));
+    float xStepSize = xDiff/numOfSteps;
+    float yStepSize = yDiff/numOfSteps;
+    for (float i = 0.0; i < numOfSteps; i++) {
+        float x = from.x + xStepSize * i;
+        float y = from.y + yStepSize * i;
+
+        glm::vec3 startVector = round(matrix * glm::vec3(x, y, 1));
+
+        TexturePoint startTexture = TexturePoint(startVector.x, startVector.y);
+
+        int index = round(startTexture.x + startTexture.y * image.width);
+        uint32_t colorUint = image.pixels[index];
         window.setPixelColour(round(x), round(y), colorUint);
     }
 }
@@ -119,8 +143,14 @@ glm::mat3 getMatrix(CanvasTriangle texture, CanvasTriangle canvas) {
             t1.x, t1.y, 1,
             t2.x, t2.y, 1,
             t3.x, t3.y, 1);
-    glm::mat3 inverse = glm::inverse(transformed);
-    glm::mat3 matrix = original * inverse;
+    glm::mat3 inverse = glm::inverse(original);
+    glm::mat3 matrix = transformed * inverse;
+    for (int i = 0; i < 3; i++) {
+        for (int j = 0; j < 3; j++) {
+            std::cout << matrix[i][j] << std::endl;
+
+        }
+    }
     return matrix;
 }
 
@@ -148,14 +178,17 @@ void drawTexture(DrawingWindow &window) {
     for (float i = 0; i < numOfSteps0; i++) {
         CanvasPoint startCanvas = CanvasPoint(round(triangle.v0().x + xStepSize0 * i), triangle.v0().y + i);
         CanvasPoint endCanvas = CanvasPoint(round(triangle.v0().x + xStepSize2 * i), triangle.v0().y + i);
-        drawLineTest(window, startCanvas, endCanvas, image);
+
+        drawTexturePoint(window, startCanvas, endCanvas, image, matrix);
+//        drawLineTest(window, startCanvas, endCanvas, image);
     }
 
     for (float i = 0; i < numOfSteps1; i++) {
 //        std::cout << intersect.x << " " << v1.x << std::endl;
         CanvasPoint startCanvas = CanvasPoint(round(intersect.x + xStepSize1 * i), intersect.y + i);
         CanvasPoint endCanvas = CanvasPoint(round(triangle.v1().x + xStepSize3 * i), intersect.y + i);
-        drawLineTest(window, startCanvas, endCanvas, image);
+//        drawLineTest(window, startCanvas, endCanvas, image);
+        drawTexturePoint(window, startCanvas, endCanvas, image, matrix);
     }
 
 }

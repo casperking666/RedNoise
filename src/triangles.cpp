@@ -135,6 +135,7 @@ glm::mat3 getMatrix(CanvasTriangle texture, CanvasTriangle canvas) {
     CanvasPoint t2 = texture.v1();
     CanvasPoint t3 = texture.v2();
 
+    // transform from canvas to texture; the matrix applies to the original canvas points
     glm::mat3 original(
             c1.x, c1.y, 1, // first column (not row!)
             c2.x, c2.y, 1, // second column

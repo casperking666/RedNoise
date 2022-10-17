@@ -35,7 +35,7 @@ add_executable(RedNoise
         libs/sdw/TextureMap.cpp
         libs/sdw/TexturePoint.cpp
         libs/sdw/Utils.cpp
-        src/triangles.cpp src/RedNoise.h)
+        src/Week4LabModel.cpp src/RedNoise.h src/triangles.h)
 
 if (MSVC)
     target_compile_options(RedNoise

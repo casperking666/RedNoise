@@ -96,16 +96,42 @@ void drawLineTest(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Textu
     for (float i = 0.0; i < numOfSteps; i++) {
         float x = from.x + xStepSize * i;
         float y = from.y + yStepSize * i;
-        uint32_t colorUint = image.pixels[round(x * y)];
+        int index = round(x + y * image.width);
+        uint32_t colorUint = image.pixels[index];
+//        std::cout << index << "  " << x << "  " << y << std::endl;
         window.setPixelColour(round(x), round(y), colorUint);
     }
+}
+
+glm::mat3 getMatrix(CanvasTriangle texture, CanvasTriangle canvas) {
+    CanvasPoint c1 = canvas.v0();
+    CanvasPoint c2 = canvas.v1();
+    CanvasPoint c3 = canvas.v2();
+    CanvasPoint t1 = texture.v0();
+    CanvasPoint t2 = texture.v1();
+    CanvasPoint t3 = texture.v2();
+
+    glm::mat3 original(
+            c1.x, c1.y, 1, // first column (not row!)
+            c2.x, c2.y, 1, // second column
+            c3.x, c3.y, 1);
+    glm::mat3 transformed(
+            t1.x, t1.y, 1,
+            t2.x, t2.y, 1,
+            t3.x, t3.y, 1);
+    glm::mat3 inverse = glm::inverse(transformed);
+    glm::mat3 matrix = original * inverse;
+    return matrix;
 }
 
 // I just think it's silly, you gave that goddamn Colour class, now we are using uint32 again. like what?
 void drawTexture(DrawingWindow &window) {
     TextureMap image = loadPPMImage();
-    CanvasTriangle sample = generateRandomPoints();
-    CanvasTriangle triangle = sortCanvasPoint(sample.v0(), sample.v1(), sample.v2());
+    CanvasTriangle canvas = CanvasTriangle(CanvasPoint(160, 10), CanvasPoint(300, 230), CanvasPoint(10, 150));
+    CanvasTriangle texture = CanvasTriangle(CanvasPoint(195, 5), CanvasPoint(395, 380), CanvasPoint(65, 330));
+    CanvasTriangle triangle = sortCanvasPoint(canvas.v0(), canvas.v1(), canvas.v2());
+    // not quite sure yet
+    glm::mat3 matrix = getMatrix(texture, canvas);
 //    std::cout << triangle.v0() << std::endl;
 //    std::cout << triangle.v1() << std::endl;
 //    std::cout << triangle.v2() << std::endl;

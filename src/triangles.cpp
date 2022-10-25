@@ -39,7 +39,6 @@ void drawLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Colour co
 }
 
 
-
 void drawTriangle(DrawingWindow &window, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2, Colour color) {
 //    window.clearPixels();
     CanvasTriangle triangle = createTriangle(v0, v1, v2);

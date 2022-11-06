@@ -120,7 +120,6 @@ void drawLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Colour co
         float z = findWeights(x, y, triangle);
         // had x and y in reversed order, couldn't have scale factor bigger than 120
         if (depthBuffer[round(y)][round(x)] < z) {
-            std::cout << "something went wrong dickhead" << std::endl;
             depthBuffer[round(y)][round(x)] = z;
             window.setPixelColour(round(x), round(y), colorUint);
         }
@@ -146,7 +145,7 @@ void drawFilledTriangle(DrawingWindow &window, CanvasPoint v0, CanvasPoint v1, C
     float xStepSize1 = (triangle.v2().x - intersect.x) / numOfSteps1;
     float xStepSize2 = (triangle.v1().x - triangle.v0().x) / numOfSteps0;
     float xStepSize3 = (triangle.v2().x - triangle.v1().x) / numOfSteps1;
-    std::cout << "something went wrong bitch" << std::endl;
+
     for (float i = 0; i < numOfSteps0; i++) {
         CanvasPoint startCanvas = CanvasPoint(round(triangle.v0().x + xStepSize0 * i), triangle.v0().y + i);
         CanvasPoint endCanvas = CanvasPoint(round(triangle.v0().x + xStepSize2 * i), triangle.v0().y + i);
@@ -158,7 +157,6 @@ void drawFilledTriangle(DrawingWindow &window, CanvasPoint v0, CanvasPoint v1, C
         CanvasPoint endCanvas = CanvasPoint(round(triangle.v1().x + xStepSize3 * i), intersect.y + i);
         drawLine(window, startCanvas, endCanvas, color, triangle);
     }
-    std::cout << "something went wrong shabi" << std::endl;
 
 }
 
@@ -166,7 +164,7 @@ void drawTriangles(DrawingWindow &window, std::vector<std::tuple<Colour, CanvasT
     for (std::tuple<Colour, CanvasTriangle> triangleTuple : triangles) {
         Colour colour;
         CanvasTriangle triangle;
-        std::tie(colour, triangle) = triangleTuple;
+        std::tie(colour, triangle) = triangleTuple; // how you get tuple values
         drawFilledTriangle(window, triangle.v0(), triangle.v1(), triangle.v2(), colour);
     }
 }
@@ -176,14 +174,13 @@ CanvasPoint getCanvasIntersectionPoint(glm::vec3 cameraPosition, glm::vec3 verte
     // this is quite confusing. firstly, we are using object coordinate, this way is a bit easier
     // as towards the camera is regarded as the positive z direction
     // this is still not 100% certain in terms of x and y, we will see
-    glm::vec3 objectCoordinate = vertexPosition - cameraPosition;
-    float scale_u = focalLength * ((objectCoordinate.x) / abs(objectCoordinate.z)) * 180; // very bad practice, but will just leave it like this, scale factor 180
-    float scale_v = - 1 * focalLength * ((objectCoordinate.y) / abs(objectCoordinate.z)) * 180; // -1 is interesting too, pixel coordinate has reversed y, obj is constructed around center
+    glm::vec3 cameraCoordinate = vertexPosition - cameraPosition;
+    float scale_u = focalLength * ((cameraCoordinate.x) / abs(cameraCoordinate.z)) * 180; // very bad practice, but will just leave it like this, scale factor 180
+    float scale_v = - 1 * focalLength * ((cameraCoordinate.y) / abs(cameraCoordinate.z)) * 180; // -1 is interesting too, pixel coordinate has reversed y, obj is constructed around center
     float image_u = scale_u + WIDTH / 2;
     float image_v = scale_v + HEIGHT / 2;
-    std::cout << objectCoordinate.z << " " << std::endl;
-    CanvasPoint coordinate = CanvasPoint(image_u, image_v, abs(objectCoordinate.z)); // not sure
-
+    std::cout << cameraCoordinate.z << " " << std::endl;
+    CanvasPoint coordinate = CanvasPoint(image_u, image_v, abs(cameraCoordinate.z)); // storing the depth but needs to be abs
     return coordinate;
 }
 
@@ -213,7 +210,6 @@ void drawPoints(std::vector<ModelTriangle> connections, DrawingWindow &window, u
     for (ModelTriangle connection : connections) {
         for (glm::vec3 point3d : connection.vertices) {
             CanvasPoint point = getCanvasIntersectionPoint(cameraPosition, point3d, focalLength);
-//            std::cout << point << std::endl;
             window.setPixelColour(int(round(point.x)), int(round(point.y)), colourUnit); // could write a function for scaling or include in the existing function
         }
     }
@@ -221,6 +217,7 @@ void drawPoints(std::vector<ModelTriangle> connections, DrawingWindow &window, u
 
 
 // deprecated lmao
+// this was designed to find the interpolations of the three vertices in the object domain (3D)
 void findDepth(std::vector<ModelTriangle> connections) {
     for (ModelTriangle connection : connections) {
         // this might seem a bit odd, but we want to find pairs like 0-1, 1-2, 2-0 in a single loop
@@ -243,15 +240,6 @@ void findDepth(std::vector<ModelTriangle> connections) {
 }
 
 
-void storingDepthBuffer(std::vector<ModelTriangle> connections, glm::vec3 cameraPosition) {
-    // not sure about float and shit
-    for (float j = 0; j < HEIGHT; j++) {
-        for (float i = 0; i < WIDTH; i++) {
-            /* TODO call function */
-        }
-    }
-}
-
 void nonOcclusionWorkflow(DrawingWindow &window) {
     Colour colour = Colour(255, 255, 255);
     uint32_t colourUnit = translateColor(colour);
@@ -259,9 +247,9 @@ void nonOcclusionWorkflow(DrawingWindow &window) {
 //            drawPoints(connections, window, colourUnit);
     std::vector<std::tuple<Colour, CanvasTriangle>> triangles = convertModTriToTri(connections);
     drawTriangles(window, triangles);
-//    for (ModelTriangle connection : connections) {
-//        std::cout << connection << std::endl;
-//    }
+    for (ModelTriangle connection : connections) {
+        std::cout << connection << std::endl;
+    }
 }
 
 

@@ -103,6 +103,7 @@ void drawLineTest(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Textu
     }
 }
 
+// more like drawTextureLine tbh
 void drawTexturePoint(DrawingWindow &window, CanvasPoint from, CanvasPoint to, TextureMap image, glm::mat3 matrix) {
 //    window.clearPixels();
 //    std::cout << "  " << from << "  " << to << std::endl;

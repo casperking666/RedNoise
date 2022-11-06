@@ -18,6 +18,8 @@
 #define WIDTH 320
 #define HEIGHT 240
 
+// interesting way to initialize 2d vector
+std::vector<std::vector<float>> depthBuffer(HEIGHT, std::vector<float> (WIDTH, 0));
 
 uint32_t translateColor(Colour colour) {
     uint32_t colorUint = (255 << 24) + (colour.red << 16) + (colour.green << 8) + colour.blue;
@@ -89,7 +91,22 @@ std::vector<ModelTriangle> readFiles(std::string geoFileName, std::string matFil
     return connections;
 }
 
-void drawLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Colour color) {
+// using the barycentric method to find z https://en.wikipedia.org/wiki/Barycentric_coordinate_system
+float findWeights(float x, float y, CanvasTriangle connection) {
+    CanvasPoint vertex1 = connection.vertices[0];
+    CanvasPoint vertex2 = connection.vertices[1];
+    CanvasPoint vertex3 = connection.vertices[2];
+
+    float denominator = (vertex2.y - vertex3.y) * (vertex1.x - vertex3.x) + (vertex3.x - vertex2.x) * (vertex1.y - vertex3.y);
+    float a = ((vertex2.y - vertex3.y) * (x - vertex3.x) + (vertex3.x - vertex2.x) * (y - vertex3.y)) / denominator;
+    float b = ((vertex3.y - vertex1.y) * (x - vertex3.x) + (vertex1.x - vertex3.x) * (y - vertex3.y)) / denominator;
+    float c = 1 - a - b;
+    float z = a * vertex1.depth + b * vertex2.depth + c * vertex3.depth;
+    return 1 / z;
+}
+
+
+void drawLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Colour color, CanvasTriangle triangle) {
 //    window.clearPixels();
     float xDiff = to.x - from.x;
     float yDiff = to.y - from.y;
@@ -100,17 +117,24 @@ void drawLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Colour co
         uint32_t colorUint = translateColor(color);
         float x = from.x + xStepSize * i;
         float y = from.y + yStepSize * i;
-        window.setPixelColour(round(x), round(y), colorUint);
+        float z = findWeights(x, y, triangle);
+        // had x and y in reversed order, couldn't have scale factor bigger than 120
+        if (depthBuffer[round(y)][round(x)] < z) {
+            std::cout << "something went wrong dickhead" << std::endl;
+            depthBuffer[round(y)][round(x)] = z;
+            window.setPixelColour(round(x), round(y), colorUint);
+        }
     }
 }
 
 
 void drawTriangle(DrawingWindow &window, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2, Colour color) {
     CanvasTriangle triangle = CanvasTriangle(v0, v1, v2);
-    drawLine(window, triangle.v0(), triangle.v1(), color);
-    drawLine(window, triangle.v0(), triangle.v2(), color);
-    drawLine(window, triangle.v1(), triangle.v2(), color);
+    drawLine(window, triangle.v0(), triangle.v1(), color, triangle);
+    drawLine(window, triangle.v0(), triangle.v2(), color, triangle);
+    drawLine(window, triangle.v1(), triangle.v2(), color, triangle);
 }
+
 
 void drawFilledTriangle(DrawingWindow &window, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2, Colour color) {
     CanvasTriangle triangle = sortCanvasPoint(v0, v1, v2);
@@ -122,18 +146,19 @@ void drawFilledTriangle(DrawingWindow &window, CanvasPoint v0, CanvasPoint v1, C
     float xStepSize1 = (triangle.v2().x - intersect.x) / numOfSteps1;
     float xStepSize2 = (triangle.v1().x - triangle.v0().x) / numOfSteps0;
     float xStepSize3 = (triangle.v2().x - triangle.v1().x) / numOfSteps1;
-
+    std::cout << "something went wrong bitch" << std::endl;
     for (float i = 0; i < numOfSteps0; i++) {
         CanvasPoint startCanvas = CanvasPoint(round(triangle.v0().x + xStepSize0 * i), triangle.v0().y + i);
         CanvasPoint endCanvas = CanvasPoint(round(triangle.v0().x + xStepSize2 * i), triangle.v0().y + i);
-        drawLine(window, startCanvas, endCanvas, color);
+        drawLine(window, startCanvas, endCanvas, color, triangle);
     }
 
     for (float i = 0; i < numOfSteps1; i++) {
         CanvasPoint startCanvas = CanvasPoint(round(intersect.x + xStepSize1 * i), intersect.y + i);
         CanvasPoint endCanvas = CanvasPoint(round(triangle.v1().x + xStepSize3 * i), intersect.y + i);
-        drawLine(window, startCanvas, endCanvas, color);
+        drawLine(window, startCanvas, endCanvas, color, triangle);
     }
+    std::cout << "something went wrong shabi" << std::endl;
 
 }
 
@@ -146,16 +171,19 @@ void drawTriangles(DrawingWindow &window, std::vector<std::tuple<Colour, CanvasT
     }
 }
 
+// this function is used to get the intersection point on the image plane from the actual 3d point
 CanvasPoint getCanvasIntersectionPoint(glm::vec3 cameraPosition, glm::vec3 vertexPosition, float focalLength) {
     // this is quite confusing. firstly, we are using object coordinate, this way is a bit easier
     // as towards the camera is regarded as the positive z direction
     // this is still not 100% certain in terms of x and y, we will see
     glm::vec3 objectCoordinate = vertexPosition - cameraPosition;
-    float scale_u = focalLength * ((objectCoordinate.x) / abs(objectCoordinate.z)) * 180; // very bad practice, but will just leave it like this
+    float scale_u = focalLength * ((objectCoordinate.x) / abs(objectCoordinate.z)) * 180; // very bad practice, but will just leave it like this, scale factor 180
     float scale_v = - 1 * focalLength * ((objectCoordinate.y) / abs(objectCoordinate.z)) * 180; // -1 is interesting too, pixel coordinate has reversed y, obj is constructed around center
     float image_u = scale_u + WIDTH / 2;
     float image_v = scale_v + HEIGHT / 2;
-    CanvasPoint coordinate = CanvasPoint(image_u, image_v);
+    std::cout << objectCoordinate.z << " " << std::endl;
+    CanvasPoint coordinate = CanvasPoint(image_u, image_v, abs(objectCoordinate.z)); // not sure
+
     return coordinate;
 }
 
@@ -191,21 +219,59 @@ void drawPoints(std::vector<ModelTriangle> connections, DrawingWindow &window, u
     }
 }
 
+
+// deprecated lmao
+void findDepth(std::vector<ModelTriangle> connections) {
+    for (ModelTriangle connection : connections) {
+        // this might seem a bit odd, but we want to find pairs like 0-1, 1-2, 2-0 in a single loop
+        int count = 1;
+        for (glm::vec3 point3d : connection.vertices) {
+            float xDiff = connection.vertices[count%3].x - point3d.x;
+            float yDiff = connection.vertices[count%3].y - point3d.y;
+            float numOfSteps = std::max(abs(xDiff), abs(yDiff));
+            float xStepSize = xDiff/numOfSteps;
+            float yStepSize = yDiff/numOfSteps;
+            for (float i = 0.0; i < numOfSteps; i++) {
+                float x = point3d.x + xStepSize * i;
+                float y = point3d.y + yStepSize * i;
+                // float z = findWeights(x, y, connection); // that z is the object coordinate z
+            }
+            count++;
+        }
+    }
+
+}
+
+
+void storingDepthBuffer(std::vector<ModelTriangle> connections, glm::vec3 cameraPosition) {
+    // not sure about float and shit
+    for (float j = 0; j < HEIGHT; j++) {
+        for (float i = 0; i < WIDTH; i++) {
+            /* TODO call function */
+        }
+    }
+}
+
+void nonOcclusionWorkflow(DrawingWindow &window) {
+    Colour colour = Colour(255, 255, 255);
+    uint32_t colourUnit = translateColor(colour);
+    std::vector<ModelTriangle> connections = readFiles("../cornell-box.obj", "../cornell-box.mtl", 0.35);
+//            drawPoints(connections, window, colourUnit);
+    std::vector<std::tuple<Colour, CanvasTriangle>> triangles = convertModTriToTri(connections);
+    drawTriangles(window, triangles);
+//    for (ModelTriangle connection : connections) {
+//        std::cout << connection << std::endl;
+//    }
+}
+
+
 void handleEvent(SDL_Event event, DrawingWindow &window) {
     if (event.type == SDL_KEYDOWN) {
         if (event.key.keysym.sym == SDLK_LEFT) std::cout << "LEFT" << std::endl;
         else if (event.key.keysym.sym == SDLK_RIGHT) std::cout << "RIGHT" << std::endl;
         else if (event.key.keysym.sym == SDLK_UP) std::cout << "UP" << std::endl;
         else if (event.key.keysym.sym == SDLK_DOWN) {
-            Colour colour = Colour(255, 255, 255);
-            uint32_t colourUnit = translateColor(colour);
-            std::vector<ModelTriangle> connections = readFiles("../cornell-box.obj", "../cornell-box.mtl", 0.35);
-//            drawPoints(connections, window, colourUnit);
-            std::vector<std::tuple<Colour, CanvasTriangle>> triangles = convertModTriToTri(connections);
-            drawTriangles(window, triangles);
-            for (ModelTriangle connection : connections) {
-                std::cout << connection << std::endl;
-            }
+            nonOcclusionWorkflow(window);
         }
     } else if (event.type == SDL_MOUSEBUTTONDOWN) {
         window.savePPM("output.ppm");

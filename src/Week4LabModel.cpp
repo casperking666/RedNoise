@@ -14,6 +14,7 @@
 #include <map>
 #include <string>
 #include <tuple>
+#include <cmath>
 
 
 #define WIDTH 320
@@ -21,6 +22,11 @@
 
 // interesting way to initialize 2d vector
 std::vector<std::vector<float>> depthBuffer(HEIGHT, std::vector<float> (WIDTH, 0));
+glm::mat3 cameraOrientation(
+        1,0,0,
+        0,1,0,
+        0,0,1
+);
 
 uint32_t translateColor(Colour colour) {
     uint32_t colorUint = (255 << 24) + (colour.red << 16) + (colour.green << 8) + colour.blue;
@@ -41,6 +47,7 @@ CanvasPoint findPoint(CanvasPoint v0, CanvasPoint v1, CanvasPoint v2) {
     else coorX = -coorX + v0.x;
     return CanvasPoint(coorX, v1.y);
 }
+
 
 std::vector<ModelTriangle> readGeoFile(std::string fileName, float scale, std::map<std::string, Colour> palette) {
     std::string text;
@@ -177,6 +184,7 @@ CanvasPoint getCanvasIntersectionPoint(glm::vec3 cameraPosition, glm::vec3 verte
     // as towards the camera is regarded as the positive z direction
     // this is still not 100% certain in terms of x and y, we will see
     glm::vec3 cameraCoordinate = vertexPosition - cameraPosition;
+    cameraCoordinate = cameraOrientation * cameraCoordinate; // something do with the coordinate system
     float scale_u = focalLength * ((cameraCoordinate.x) / abs(cameraCoordinate.z)) * 150; // very bad practice, but will just leave it like this, scale factor 180
     float scale_v = - 1 * focalLength * ((cameraCoordinate.y) / abs(cameraCoordinate.z)) * 150; // -1 is interesting too, pixel coordinate has reversed y, obj is constructed around center
     float image_u = scale_u + WIDTH / 2;
@@ -240,15 +248,12 @@ void findDepth(std::vector<ModelTriangle> connections) {
 
 }
 
-void translateCamera(glm::vec3 shiftFactor, glm::vec3 *cameraPosition) {
-    *cameraPosition = *cameraPosition + shiftFactor;
-}
 
 glm::mat3 getRotationMatrixX(float angle) {
     glm::mat3 rotationMatrix(
             1, 0, 0,
-            0, std::cos(angle), -1 * std::sin(angle),
-            0, std::sin(angle), std::cos(angle));
+            0, std::cos(angle), std::sin(angle),
+            0, -1 * std::sin(angle), std::cos(angle));
     return rotationMatrix;
 }
 
@@ -260,6 +265,48 @@ glm::mat3 getRotationMatrixY(float angle) {
     return rotationMatrix;
 }
 
+float convertDegreesToRadians(float angle) {
+    return angle * 3.14159 / 180;
+}
+
+void getOrientationMatrix(float angle, bool isX) {
+    glm::mat3 rotationMatrix;
+    if (isX) rotationMatrix = getRotationMatrixX(convertDegreesToRadians(angle));
+    else rotationMatrix = getRotationMatrixY(convertDegreesToRadians(angle));
+    cameraOrientation = rotationMatrix * cameraOrientation;
+}
+
+void cleanDepthBuffer() {
+    std::vector<std::vector<float>> temp(HEIGHT, std::vector<float> (WIDTH, 0));
+    depthBuffer = temp;
+}
+
+
+void translateCamera(glm::vec3 shiftFactor, glm::vec3 *cameraPosition) {
+    *cameraPosition = *cameraPosition + shiftFactor;
+}
+
+
+glm::mat3 getOrientationMatrix(glm::vec3 cameraPosition) {
+    glm::vec3 forward = cameraPosition;
+    glm::vec3 right = glm::cross(cameraPosition, glm::vec3(0,1,0));
+    glm::vec3 up = glm::cross(forward, right);
+    glm::mat3 orientation(
+            right,up,forward
+            );
+    return orientation;
+}
+
+glm::mat3 getInitialOrientationMatrix() {
+    glm::mat3 orientation(
+            1,0,1,
+            0,1,0,
+            0,0,1
+    );
+    return orientation;
+}
+
+
 void nonOcclusionWorkflow(DrawingWindow &window, glm::vec3 cameraPosition) {
     std::vector<ModelTriangle> connections = readFiles("../cornell-box.obj", "../cornell-box.mtl", 0.35);
     // drawPoints(connections, window, colourUnit);
@@ -270,14 +317,6 @@ void nonOcclusionWorkflow(DrawingWindow &window, glm::vec3 cameraPosition) {
 //    }
 }
 
-void cleanDepthBuffer() {
-    std::vector<std::vector<float>> temp(HEIGHT, std::vector<float> (WIDTH, 0));
-    depthBuffer = temp;
-}
-
-float convertDegreesToRadians(float angle) {
-    return angle * 3.14159 / 180;
-}
 
 void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 *cameraPosition) {
     if (event.type == SDL_KEYDOWN) {
@@ -307,7 +346,7 @@ void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 *cameraPositi
             glm::vec3 shiftFactor = glm::vec3 (0.0, 0.1, 0.0);
             translateCamera(shiftFactor, cameraPosition);
             std::cout << glm::to_string(*cameraPosition) << std::endl;
-        } else if (event.key.keysym.sym == SDLK_u) {
+        } else if (event.key.keysym.sym == SDLK_o) { // test for week 4 last question
             nonOcclusionWorkflow(window, *cameraPosition);
         } else if (event.key.keysym.sym == SDLK_f) {
             window.clearPixels();
@@ -336,10 +375,30 @@ void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 *cameraPositi
             cleanDepthBuffer();
             *cameraPosition = getRotationMatrixY(convertDegreesToRadians(1)) * *cameraPosition;
             std::cout << glm::to_string(*cameraPosition) << std::endl;
-        } else if (event.key.keysym.sym == SDLK_t) {
+        } else if (event.key.keysym.sym == SDLK_u) {
             window.clearPixels();
             cleanDepthBuffer();
             *cameraPosition = getRotationMatrixY(convertDegreesToRadians(-1)) * *cameraPosition;
+            std::cout << glm::to_string(*cameraPosition) << std::endl;
+        } else if (event.key.keysym.sym == SDLK_w) {
+            window.clearPixels();
+            cleanDepthBuffer();
+            getOrientationMatrix(5, true); // for those we don't change cameraPosition at all
+            std::cout << glm::to_string(*cameraPosition) << std::endl;
+        } else if (event.key.keysym.sym == SDLK_s) {
+            window.clearPixels();
+            cleanDepthBuffer();
+            getOrientationMatrix(-5, true);
+            std::cout << glm::to_string(*cameraPosition) << std::endl;
+        } else if (event.key.keysym.sym == SDLK_a) {
+            window.clearPixels();
+            cleanDepthBuffer();
+            getOrientationMatrix(5, false);
+            std::cout << glm::to_string(*cameraPosition) << std::endl;
+        } else if (event.key.keysym.sym == SDLK_d) {
+            window.clearPixels();
+            cleanDepthBuffer();
+            getOrientationMatrix(-5, false);
             std::cout << glm::to_string(*cameraPosition) << std::endl;
         }
     } else if (event.type == SDL_MOUSEBUTTONDOWN) {

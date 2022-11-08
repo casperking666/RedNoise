@@ -111,7 +111,7 @@ float findWeights(float x, float y, CanvasTriangle connection) {
     float b = ((vertex3.y - vertex1.y) * (x - vertex3.x) + (vertex1.x - vertex3.x) * (y - vertex3.y)) / denominator;
     float c = 1 - a - b;
     float z = a * vertex1.depth + b * vertex2.depth + c * vertex3.depth;
-    return 1 / z;
+    return z;
 }
 
 
@@ -122,10 +122,11 @@ void drawLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Colour co
     float numOfSteps = std::max(abs(xDiff), abs(yDiff));
     float xStepSize = xDiff/numOfSteps;
     float yStepSize = yDiff/numOfSteps;
-    for (float i = 0.0; i < numOfSteps; i++) {
+    for (float i = 0.0; i <= numOfSteps; i++) { // set to <= now the missing rasterizing points are filled
         uint32_t colorUint = translateColor(color);
         float x = from.x + xStepSize * i;
         float y = from.y + yStepSize * i;
+        if (x > WIDTH - 1 or y > HEIGHT - 1 or x < 0 or y < 0) continue;
         float z = findWeights(x, y, triangle);
         // had x and y in reversed order, couldn't have scale factor bigger than 120
         if (depthBuffer[round(y)][round(x)] < z) {
@@ -133,14 +134,6 @@ void drawLine(DrawingWindow &window, CanvasPoint from, CanvasPoint to, Colour co
             window.setPixelColour(round(x), round(y), colorUint);
         }
     }
-}
-
-
-void drawTriangle(DrawingWindow &window, CanvasPoint v0, CanvasPoint v1, CanvasPoint v2, Colour color) {
-    CanvasTriangle triangle = CanvasTriangle(v0, v1, v2);
-    drawLine(window, triangle.v0(), triangle.v1(), color, triangle);
-    drawLine(window, triangle.v0(), triangle.v2(), color, triangle);
-    drawLine(window, triangle.v1(), triangle.v2(), color, triangle);
 }
 
 
@@ -184,13 +177,13 @@ CanvasPoint getCanvasIntersectionPoint(glm::vec3 cameraPosition, glm::vec3 verte
     // as towards the camera is regarded as the positive z direction
     // this is still not 100% certain in terms of x and y, we will see
     glm::vec3 cameraCoordinate = vertexPosition - cameraPosition;
-    cameraCoordinate = cameraOrientation * cameraCoordinate; // something do with the coordinate system
-    float scale_u = focalLength * ((cameraCoordinate.x) / abs(cameraCoordinate.z)) * 150; // very bad practice, but will just leave it like this, scale factor 180
-    float scale_v = - 1 * focalLength * ((cameraCoordinate.y) / abs(cameraCoordinate.z)) * 150; // -1 is interesting too, pixel coordinate has reversed y, obj is constructed around center
+    cameraCoordinate = cameraCoordinate * cameraOrientation; // something do with the coordinate system
+    float scale_u = focalLength * ((cameraCoordinate.x) / abs(cameraCoordinate.z)) * 100; // very bad practice, but will just leave it like this, scale factor 180
+    float scale_v = -1 * focalLength * ((cameraCoordinate.y) / abs(cameraCoordinate.z)) * 100; // -1 is interesting too, pixel coordinate has reversed y, obj is constructed around center
     float image_u = scale_u + WIDTH / 2;
     float image_v = scale_v + HEIGHT / 2;
 //    std::cout << cameraCoordinate.z << " " << std::endl;
-    CanvasPoint coordinate = CanvasPoint(image_u, image_v, abs(cameraCoordinate.z)); // storing the depth but needs to be abs
+    CanvasPoint coordinate = CanvasPoint(image_u, image_v, abs(1 / cameraCoordinate.z)); // storing the depth but needs to be abs
     return coordinate;
 }
 
@@ -266,10 +259,10 @@ glm::mat3 getRotationMatrixY(float angle) {
 }
 
 float convertDegreesToRadians(float angle) {
-    return angle * 3.14159 / 180;
+    return angle * (M_PI / 180);
 }
 
-void getOrientationMatrix(float angle, bool isX) {
+void changeOrientationMatrix(float angle, bool isX) {
     glm::mat3 rotationMatrix;
     if (isX) rotationMatrix = getRotationMatrixX(convertDegreesToRadians(angle));
     else rotationMatrix = getRotationMatrixY(convertDegreesToRadians(angle));
@@ -277,8 +270,11 @@ void getOrientationMatrix(float angle, bool isX) {
 }
 
 void cleanDepthBuffer() {
-    std::vector<std::vector<float>> temp(HEIGHT, std::vector<float> (WIDTH, 0));
-    depthBuffer = temp;
+    for (float j = 0; j < depthBuffer.size(); j++) {
+        for (float i = 0; i < depthBuffer[0].size(); i++) {
+            depthBuffer[j][i] = 0.0;
+        }
+    }
 }
 
 
@@ -286,10 +282,10 @@ void translateCamera(glm::vec3 shiftFactor, glm::vec3 *cameraPosition) {
     *cameraPosition = *cameraPosition + shiftFactor;
 }
 
-
-glm::mat3 getOrientationMatrix(glm::vec3 cameraPosition) {
-    glm::vec3 forward = cameraPosition;
-    glm::vec3 right = glm::cross(cameraPosition, glm::vec3(0,1,0));
+// it only works when orbitng with the y-axis
+glm::mat3 getOrientationMatrixY(glm::vec3 cameraPosition) {
+    glm::vec3 forward = glm::normalize(cameraPosition);
+    glm::vec3 right = glm::cross(glm::vec3(0,1,0), forward);
     glm::vec3 up = glm::cross(forward, right);
     glm::mat3 orientation(
             right,up,forward
@@ -363,48 +359,58 @@ void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 *cameraPositi
         } else if (event.key.keysym.sym == SDLK_x) {
             window.clearPixels();
             cleanDepthBuffer();
-            *cameraPosition = getRotationMatrixX(convertDegreesToRadians(1)) * *cameraPosition;
+            *cameraPosition = getRotationMatrixX(convertDegreesToRadians(5)) * *cameraPosition;
             std::cout << glm::to_string(*cameraPosition) << std::endl;
         } else if (event.key.keysym.sym == SDLK_c) {
             window.clearPixels();
             cleanDepthBuffer();
-            *cameraPosition = getRotationMatrixX(convertDegreesToRadians(-1)) * *cameraPosition;
+            *cameraPosition = getRotationMatrixX(convertDegreesToRadians(-5)) * *cameraPosition;
             std::cout << glm::to_string(*cameraPosition) << std::endl;
         } else if (event.key.keysym.sym == SDLK_y) {
             window.clearPixels();
             cleanDepthBuffer();
-            *cameraPosition = getRotationMatrixY(convertDegreesToRadians(1)) * *cameraPosition;
+            *cameraPosition = getRotationMatrixY(convertDegreesToRadians(5)) * *cameraPosition;
             std::cout << glm::to_string(*cameraPosition) << std::endl;
         } else if (event.key.keysym.sym == SDLK_u) {
             window.clearPixels();
             cleanDepthBuffer();
-            *cameraPosition = getRotationMatrixY(convertDegreesToRadians(-1)) * *cameraPosition;
+            *cameraPosition = getRotationMatrixY(convertDegreesToRadians(-5)) * *cameraPosition;
             std::cout << glm::to_string(*cameraPosition) << std::endl;
         } else if (event.key.keysym.sym == SDLK_w) {
             window.clearPixels();
             cleanDepthBuffer();
-            getOrientationMatrix(5, true); // for those we don't change cameraPosition at all
+            changeOrientationMatrix(5, true); // for those we don't change cameraPosition at all
             std::cout << glm::to_string(*cameraPosition) << std::endl;
         } else if (event.key.keysym.sym == SDLK_s) {
             window.clearPixels();
             cleanDepthBuffer();
-            getOrientationMatrix(-5, true);
+            changeOrientationMatrix(-5, true);
             std::cout << glm::to_string(*cameraPosition) << std::endl;
         } else if (event.key.keysym.sym == SDLK_a) {
             window.clearPixels();
             cleanDepthBuffer();
-            getOrientationMatrix(5, false);
+            changeOrientationMatrix(5, false);
             std::cout << glm::to_string(*cameraPosition) << std::endl;
         } else if (event.key.keysym.sym == SDLK_d) {
             window.clearPixels();
             cleanDepthBuffer();
-            getOrientationMatrix(-5, false);
+            changeOrientationMatrix(-5, false);
             std::cout << glm::to_string(*cameraPosition) << std::endl;
         }
     } else if (event.type == SDL_MOUSEBUTTONDOWN) {
         window.savePPM("output.ppm");
         window.saveBMP("output.bmp");
     }
+}
+
+void drawTrianglesLoop(DrawingWindow &window, std::vector<ModelTriangle> connections, glm::vec3 *cameraPosition) {
+    window.clearPixels();
+    cleanDepthBuffer();
+    *cameraPosition = getRotationMatrixY(convertDegreesToRadians(-1)) * *cameraPosition;
+    cameraOrientation = getOrientationMatrixY(*cameraPosition);
+    std::cout << glm::to_string(*cameraPosition) << std::endl;
+    std::vector<std::tuple<Colour, CanvasTriangle>> triangles = convertModTriToTri(connections, *cameraPosition);
+    drawTriangles(window, triangles);
 }
 
 int main(int argc, char *argv[]) {
@@ -421,8 +427,15 @@ int main(int argc, char *argv[]) {
         if (window.pollForInputEvents(event)) handleEvent(event, window, cameraPosition);
         std::vector<std::tuple<Colour, CanvasTriangle>> triangles = convertModTriToTri(connections, *cameraPosition);
         drawTriangles(window, triangles);
+//        drawTrianglesLoop(window, connections, cameraPosition);
         // Need to render the frame at the end, or nothing actually gets shown on the screen !
         window.renderFrame();
     }
 
 }
+
+// Just in case I forgot, glm matrices are fucking retarded, for the rest do m * v, for the cameraCoordinate one,
+// since simon has said it that way, do v * m.
+
+// at least I know what the problem was, fucking simon's stupid pdf slides
+// the bug with cross product is true, but the main problem was it needs to be v * m instead of m * v ffs.

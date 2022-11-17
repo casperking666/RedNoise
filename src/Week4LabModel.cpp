@@ -15,6 +15,7 @@
 #include <string>
 #include <tuple>
 #include <cmath>
+#include <RayTriangleIntersection.h>
 
 
 #define WIDTH 320
@@ -313,6 +314,41 @@ void nonOcclusionWorkflow(DrawingWindow &window, glm::vec3 cameraPosition) {
 //    }
 }
 
+bool checkWithinTriangle(glm::vec3 possibleSolution) {
+    float t = possibleSolution[0];
+    float u = possibleSolution[1];
+    float v = possibleSolution[2];
+    if ((u >= 0 && u <= 1) && (v >= 0 && v <= 1) && (u + v <= 1) && t > 0) {
+        return true;
+    } else return false;
+}
+
+
+std::vector<RayTriangleIntersection> getClosestIntersections(glm::vec3 cameraPosition, glm::vec3 rayDirection, std::vector<ModelTriangle> triangles) {
+    int i = 0;
+    std::vector<RayTriangleIntersection> rays;
+    for (ModelTriangle triangle : triangles) {
+
+        std::array<glm::vec3, 3> vertices = triangle.vertices;
+        glm::vec3 e0 = vertices[1] - vertices[0];
+        glm::vec3 e1 = vertices[2] - vertices[0];
+        glm::vec3 SPVector = cameraPosition - vertices[0];
+        glm::mat3 DEMatrix(-rayDirection, e0, e1);
+        glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector; // u, v, t
+
+        glm::vec3 normalizedSolution = (possibleSolution);
+        std::cout << glm::to_string(normalizedSolution) << std::endl;
+        if (checkWithinTriangle(normalizedSolution)) {
+            std::cout << "hello world" << std::endl;
+            glm::vec3 r = vertices[0] + normalizedSolution[1] * (vertices[1] - vertices[0]) + normalizedSolution[2] * (vertices[2] - vertices[0]);
+            RayTriangleIntersection ray = RayTriangleIntersection(r, normalizedSolution[2], triangle, i);
+            std::cout << ray.intersectedTriangle.colour << std::endl;
+            rays.push_back(ray);
+        }
+        i++; // no idea
+    }
+    return rays;
+}
 
 void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 *cameraPosition) {
     if (event.type == SDL_KEYDOWN) {
@@ -413,6 +449,8 @@ void drawTrianglesLoop(DrawingWindow &window, std::vector<ModelTriangle> connect
     drawTriangles(window, triangles);
 }
 
+
+
 int main(int argc, char *argv[]) {
     DrawingWindow window = DrawingWindow(WIDTH, HEIGHT, false);
     SDL_Event event;
@@ -423,10 +461,18 @@ int main(int argc, char *argv[]) {
     cameraPosition = &var;
     std::vector<ModelTriangle> connections = readFiles("../cornell-box.obj", "../cornell-box.mtl", 0.35);
 
+    // ray tracing part
+    glm::vec3 cameraTarget = glm::vec3(0.0,0.0, 2.0);
+    glm::vec3 cameraDirection = glm::normalize(glm::vec3(0.0, 0.0, -2.0));
+    std::vector<RayTriangleIntersection> rays = getClosestIntersections(*cameraPosition, cameraDirection, connections);
+    std::cout << rays.size() << std::endl;
+    for (RayTriangleIntersection ray : rays) std::cout << ray.intersectedTriangle << std::endl;
+
     while (true) {
         if (window.pollForInputEvents(event)) handleEvent(event, window, cameraPosition);
         std::vector<std::tuple<Colour, CanvasTriangle>> triangles = convertModTriToTri(connections, *cameraPosition);
-        drawTriangles(window, triangles);
+
+//        drawTriangles(window, triangles);
 //        drawTrianglesLoop(window, connections, cameraPosition);
         // Need to render the frame at the end, or nothing actually gets shown on the screen !
         window.renderFrame();

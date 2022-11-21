@@ -172,6 +172,69 @@ void drawTriangles(DrawingWindow &window, std::vector<std::tuple<Colour, CanvasT
     }
 }
 
+bool checkWithinTriangle(glm::vec3 possibleSolution) {
+    float t = possibleSolution[0];
+    float u = possibleSolution[1];
+    float v = possibleSolution[2];
+    if ((u >= 0 && u <= 1) && (v >= 0 && v <= 1) && (u + v <= 1) && t > 0) {
+        return true;
+    } else return false;
+}
+
+RayTriangleIntersection getClosestIntersections(glm::vec3 cameraPosition, glm::vec3 rayDirection, std::vector<ModelTriangle> triangles) {
+    int i = 0;
+    float temp = 20; // just for testing
+    RayTriangleIntersection ray;
+    for (ModelTriangle triangle : triangles) {
+
+        std::array<glm::vec3, 3> vertices = triangle.vertices;
+        glm::vec3 e0 = vertices[1] - vertices[0];
+        glm::vec3 e1 = vertices[2] - vertices[0];
+        glm::vec3 SPVector = cameraPosition - vertices[0];
+        glm::mat3 DEMatrix(-rayDirection, e0, e1);
+        glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector; // u, v, t
+
+//        std::cout << glm::to_string(possibleSolution) << std::endl;
+        if (checkWithinTriangle(possibleSolution)) {
+            if (possibleSolution[0] < temp) {
+                glm::vec3 r = vertices[0] + possibleSolution[1] * (vertices[1] - vertices[0]) + possibleSolution[2] * (vertices[2] - vertices[0]);
+                ray = RayTriangleIntersection(r, possibleSolution[0], triangle, i);
+                temp = possibleSolution[0];
+            }
+        }
+        i++; // no idea
+    }
+//    std::cout << ray.intersectedTriangle.colour << std::endl;
+    return ray;
+}
+
+
+glm::vec3 getDirection(glm::vec3 cameraPosition, CanvasPoint coordinate, float focalLength) {
+    float image_u = coordinate.x;
+    float image_v = coordinate.y;
+    float scale_u = image_u - WIDTH / 2;
+    float scale_v = image_v - HEIGHT / 2;
+    float x = scale_u / (150 * focalLength); // x/z to be more specific
+    float y = scale_v / (150 * focalLength);
+    glm::vec3 cameraCoordinate = (glm::vec3(x, -y, -1));
+    std::cout << glm::to_string(cameraCoordinate) << std::endl;
+    glm::vec3 vertexPosition = cameraCoordinate + cameraPosition;
+    return cameraCoordinate;
+}
+
+void draw(DrawingWindow &window, glm::vec3 cameraPosition, float focalLength, std::vector<ModelTriangle> triangles) {
+    for (float j = 0; j < HEIGHT; j++) {
+        for (float i = 0; i < WIDTH; i++) {
+            glm::vec3 rayDirection = getDirection(cameraPosition, CanvasPoint(i, j), focalLength);
+            RayTriangleIntersection ray = getClosestIntersections(cameraPosition, rayDirection, triangles);
+            Colour color = ray.intersectedTriangle.colour;
+//            std::cout << color << std::endl;
+            window.setPixelColour(i, j, translateColor(color));
+        }
+    }
+
+}
+
 // this function is used to get the intersection point on the image plane from the actual 3d point
 CanvasPoint getCanvasIntersectionPoint(glm::vec3 cameraPosition, glm::vec3 vertexPosition, float focalLength) {
     // this is quite confusing. firstly, we are using object coordinate, this way is a bit easier
@@ -314,41 +377,6 @@ void nonOcclusionWorkflow(DrawingWindow &window, glm::vec3 cameraPosition) {
 //    }
 }
 
-bool checkWithinTriangle(glm::vec3 possibleSolution) {
-    float t = possibleSolution[0];
-    float u = possibleSolution[1];
-    float v = possibleSolution[2];
-    if ((u >= 0 && u <= 1) && (v >= 0 && v <= 1) && (u + v <= 1) && t > 0) {
-        return true;
-    } else return false;
-}
-
-
-std::vector<RayTriangleIntersection> getClosestIntersections(glm::vec3 cameraPosition, glm::vec3 rayDirection, std::vector<ModelTriangle> triangles) {
-    int i = 0;
-    std::vector<RayTriangleIntersection> rays;
-    for (ModelTriangle triangle : triangles) {
-
-        std::array<glm::vec3, 3> vertices = triangle.vertices;
-        glm::vec3 e0 = vertices[1] - vertices[0];
-        glm::vec3 e1 = vertices[2] - vertices[0];
-        glm::vec3 SPVector = cameraPosition - vertices[0];
-        glm::mat3 DEMatrix(-rayDirection, e0, e1);
-        glm::vec3 possibleSolution = glm::inverse(DEMatrix) * SPVector; // u, v, t
-
-        glm::vec3 normalizedSolution = (possibleSolution);
-        std::cout << glm::to_string(normalizedSolution) << std::endl;
-        if (checkWithinTriangle(normalizedSolution)) {
-            std::cout << "hello world" << std::endl;
-            glm::vec3 r = vertices[0] + normalizedSolution[1] * (vertices[1] - vertices[0]) + normalizedSolution[2] * (vertices[2] - vertices[0]);
-            RayTriangleIntersection ray = RayTriangleIntersection(r, normalizedSolution[2], triangle, i);
-            std::cout << ray.intersectedTriangle.colour << std::endl;
-            rays.push_back(ray);
-        }
-        i++; // no idea
-    }
-    return rays;
-}
 
 void handleEvent(SDL_Event event, DrawingWindow &window, glm::vec3 *cameraPosition) {
     if (event.type == SDL_KEYDOWN) {
@@ -463,14 +491,15 @@ int main(int argc, char *argv[]) {
 
     // ray tracing part
     glm::vec3 cameraTarget = glm::vec3(0.0,0.0, 2.0);
-    glm::vec3 cameraDirection = glm::normalize(glm::vec3(0.0, 0.0, -2.0));
-    std::vector<RayTriangleIntersection> rays = getClosestIntersections(*cameraPosition, cameraDirection, connections);
-    std::cout << rays.size() << std::endl;
-    for (RayTriangleIntersection ray : rays) std::cout << ray.intersectedTriangle << std::endl;
+    glm::vec3 cameraDirection = glm::normalize(glm::vec3(0.0, 0.0, -2));
+    RayTriangleIntersection ray = getClosestIntersections(*cameraPosition, cameraDirection, connections);
+    std::cout << ray << std::endl;
+
 
     while (true) {
         if (window.pollForInputEvents(event)) handleEvent(event, window, cameraPosition);
         std::vector<std::tuple<Colour, CanvasTriangle>> triangles = convertModTriToTri(connections, *cameraPosition);
+        draw(window, *cameraPosition, 2.0, connections);
 
 //        drawTriangles(window, triangles);
 //        drawTrianglesLoop(window, connections, cameraPosition);

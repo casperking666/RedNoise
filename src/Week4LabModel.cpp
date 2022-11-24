@@ -218,21 +218,24 @@ glm::vec3 getDirection(glm::vec3 cameraPosition, CanvasPoint coordinate, float f
     float y = scale_v / (150 * focalLength);
     glm::vec3 cameraCoordinate = (glm::vec3(x, -y, -1));
     std::cout << glm::to_string(cameraCoordinate) << std::endl;
-    glm::vec3 vertexPosition = cameraCoordinate + cameraPosition;
     return cameraCoordinate;
 }
 
 void draw(DrawingWindow &window, glm::vec3 cameraPosition, float focalLength, std::vector<ModelTriangle> triangles) {
+    glm::vec3 lightSource = glm::vec3(0.0, 0.8, 0.0); // not sure
     for (float j = 0; j < HEIGHT; j++) {
         for (float i = 0; i < WIDTH; i++) {
             glm::vec3 rayDirection = getDirection(cameraPosition, CanvasPoint(i, j), focalLength);
             RayTriangleIntersection ray = getClosestIntersections(cameraPosition, rayDirection, triangles);
-            Colour color = ray.intersectedTriangle.colour;
-//            std::cout << color << std::endl;
-            window.setPixelColour(i, j, translateColor(color));
+            glm::vec3 surfaceToSource = -lightSource + ray.intersectionPoint; // think about vector calculation
+            RayTriangleIntersection shadowRay = getClosestIntersections(lightSource, surfaceToSource, triangles);
+            if (shadowRay.triangleIndex == ray.triangleIndex) {
+                Colour color = ray.intersectedTriangle.colour;
+                // std::cout << color << std::endl;
+                window.setPixelColour(i, j, translateColor(color));
+            } else window.setPixelColour(i, j, translateColor(Colour(255,255,255)));
         }
     }
-
 }
 
 // this function is used to get the intersection point on the image plane from the actual 3d point
